@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YKPL - Yuva Karhada Premiere League 2026</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>YKPL - Yuva Karhada Premiere League 2026</h1>
+            <p class="subtitle">Cricket Teams & Player Details</p>
+            <button id="refreshBtn" class="refresh-btn">🔄 Refresh Data</button>
+        </header>
+
+        <div id="lastUpdated" class="last-updated"></div>
+
+        <div class="teams-grid" id="teamsContainer">
+            <!-- Teams will be dynamically loaded here -->
+        </div>
+
+        <div id="loading" class="loading">Loading teams data...</div>
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
