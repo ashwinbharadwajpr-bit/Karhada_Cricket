@@ -1,8 +1,18 @@
-// Configuration
-const TEAM_NAMES = ['Malnad Bulls', 'Crimson Warriors', 'Friends XI', 'Bengaluru Gladiators', 'Mysore Karadas', 'SDP GC', 'UCCB', 'Sanatan Strikers'];
-//const EXCEL_FOLDER = 'excel_data/'; // Folder where Excel files are stored
-const EXCEL_FOLDER = 'https://1drv.ms/f/c/a544a38d50095bd1/IgB2fAeEvrI0RoY35ynCg4o2Acl1zcOhe7UgvmMuRntgvqQ?e=IgR5pz/';
+// Configuration - GitHub data source
+const GITHUB_BASE_URL = 'https://raw.githubusercontent.com/ashwinbharadwajpr-bit/Karhada_Cricket/main';
+const TEAM_NAMES = ['Bengaluru Gladiators', 'Crimson Warriors', 'Friends XI', 'Malnad Bulls', 'Mysore Karadas', 'SDP GC', 'Sanatan Strikers', 'UCCB'];
 
+// Team colors for visual distinction
+const TEAM_COLORS = {
+  'Bengaluru Gladiators': '#FF6B6B',
+  'Crimson Warriors': '#C92A2A',
+  'Friends XI': '#4ECDC4',
+  'Malnad Bulls': '#FFD93D',
+  'Mysore Karadas': '#6BCB77',
+  'SDP GC': '#4D96FF',
+  'Sanatan Strikers': '#FF9F1C',
+  'UCCB': '#9D4EDD'
+};
 // Global data store
 let teamsData = [];
 
@@ -16,17 +26,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Load data for all teams
+// Load data for all teams from GitHub
 async function loadAllTeamsData() {
     showLoading(true);
     hideError();
     teamsData = [];
 
     try {
-        // Load each team's Excel file
+        // Load each team's CSV file from GitHub
         for (const teamName of TEAM_NAMES) {
             try {
-                const teamData = await loadTeamExcel(teamName);
+                const teamData = await loadTeamCSV(teamName);
                 if (teamData) {
                     teamsData.push(teamData);
                 }
@@ -37,8 +47,11 @@ async function loadAllTeamsData() {
         }
 
         if (teamsData.length === 0) {
-            throw new Error('No team data could be loaded. Please ensure Excel files are in the excel_data folder.');
+            throw new Error('No team data could be loaded. Please check your internet connection and try again.');
         }
+
+        // Sort teams by name
+        teamsData.sort((a, b) => a.teamName.localeCompare(b.teamName));
 
         displayTeams();
         updateLastUpdatedTime();
@@ -49,52 +62,44 @@ async function loadAllTeamsData() {
     }
 }
 
-// Load Excel file for a specific team
-async function loadTeamExcel(teamName) {
-    const fileName = `${EXCEL_FOLDER}${teamName}.csv`;
+// Load CSV file for a specific team from GitHub
+async function loadTeamCSV(teamName) {
+    const fileName = `${teamName}.csv`;
+    const csvUrl = `${GITHUB_BASE_URL}/${encodeURIComponent(fileName)}`;
 
     try {
-        const response = await fetch(fileName);
+        console.log(`Fetching ${teamName} from GitHub...`);
+        
+        const response = await fetch(csvUrl);
         if (!response.ok) {
-            throw new Error(`Failed to load ${fileName}`);
+            throw new Error(`Failed to load ${fileName}: ${response.status}`);
         }
 
         const csvText = await response.text();
+        const teamData = parseTeamData(teamName, csvText);
         
-        // Parse CSV manually
-        const lines = csvText.trim().split('\n');
-        if (lines.length <= 1) {
-            throw new Error(`No data in ${fileName}`);
+        if (teamData) {
+            console.log(`✓ Loaded ${teamName}: ${teamData.players.length} players`);
+            return teamData;
+        } else {
+            console.warn(`⚠ No valid data for ${teamName}`);
+            return null;
         }
-        
-        // Parse header
-        const headers = parseCSVLine(lines[0]);
-        
-        // Parse data rows
-        const jsonData = [];
-        jsonData.push(headers);
-        for (let i = 1; i < lines.length; i++) {
-            jsonData.push(parseCSVLine(lines[i]));
-        }
-
-        // Parse the data
-        const teamData = parseTeamData(teamName, jsonData);
-        return teamData;
     } catch (error) {
         console.error(`Error loading ${fileName}:`, error);
         return null;
     }
 }
 
-// Parse CSV line
+// Parse a CSV line handling quoted fields
 function parseCSVLine(line) {
     const result = [];
     let current = '';
     let insideQuotes = false;
-    
+
     for (let i = 0; i < line.length; i++) {
         const char = line[i];
-        
+
         if (char === '"') {
             insideQuotes = !insideQuotes;
         } else if (char === ',' && !insideQuotes) {
@@ -104,130 +109,147 @@ function parseCSVLine(line) {
             current += char;
         }
     }
+
     result.push(current.trim());
     return result;
 }
 
-// Parse Excel data into structured format
-function parseTeamData(teamName, data) {
-    if (!data || data.length < 2) {
-        return null;
-    }
-
-    // First row is headers, rest are data rows
-    const headers = data[0];
-    const dataRows = data.slice(1);
-
-    // Find column indices
-    const nameIndex = 0;  // Player Name is first column
-    const bidIndex = 1;   // Bid Amount is second column
-
-    // Check if last row is the "Remaining Bid Amount" row
-    let remainingBidAmount = 0;
-    let playerRows = dataRows;
-
-    const lastRow = dataRows[dataRows.length - 1];
-    if (lastRow && lastRow[nameIndex] &&
-        lastRow[nameIndex].toString().toLowerCase().includes('remaining')) {
-        remainingBidAmount = parseFloat(lastRow[bidIndex]) || 0;
-        playerRows = dataRows.slice(0, -1);  // Exclude the remaining bid row
-    }
-
-    // Parse players
-    const players = playerRows
-        .filter(row => row && row[nameIndex]) // Filter out empty rows
-        .map(row => ({
-            name: row[nameIndex] || 'Unknown',
-            bidAmount: formatCurrency(row[bidIndex]),
-            rawBidAmount: parseFloat(row[bidIndex]) || 0
-        }));
-
-    // Calculate total bid amount
-    const totalBid = players.reduce((sum, player) => sum + player.rawBidAmount, 0);
-
-    return {
-        teamName: teamName.toUpperCase(),
-        players: players,
-        totalBid: formatCurrency(totalBid),
-        remainingBid: formatCurrency(remainingBidAmount),
-        playerCount: players.length,
-        headers: headers
-    };
+// Parse amount string to number
+function parseAmount(amountStr) {
+    if (!amountStr) return 0;
+    
+    // Remove all non-numeric characters except decimal point
+    const cleaned = String(amountStr).replace(/[^\d.]/g, '');
+    const num = parseFloat(cleaned);
+    
+    return isNaN(num) ? 0 : num;
 }
 
-// Display all teams on the page
+// Parse CSV data into structured format
+function parseTeamData(teamName, csvText) {
+    try {
+        const lines = csvText.trim().split('\n');
+        
+        if (lines.length < 2) {
+            return null;
+        }
+
+        const headers = parseCSVLine(lines[0]);
+        const players = [];
+        let totalBudget = 0;
+        let remainingBudget = 0;
+
+        // Parse player rows
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const values = parseCSVLine(line);
+            
+            // Check if this is the remaining budget line
+            if (values[0] && values[0].toLowerCase().includes('remaining')) {
+                remainingBudget = parseAmount(values[1]);
+                continue;
+            }
+
+            // Check if this is the total budget line
+            if (values[0] && values[0].toLowerCase().includes('total')) {
+                totalBudget = parseAmount(values[1]);
+                continue;
+            }
+
+            // Skip empty rows
+            if (!values[0] || values[0].length === 0) {
+                continue;
+            }
+
+            // Add valid player row
+            const bidAmount = parseAmount(values[1]);
+            if (values[0].length > 0) {
+                players.push({
+                    name: values[0],
+                    bidAmount: bidAmount,
+                    bidFormatted: formatCurrency(bidAmount)
+                });
+            }
+        }
+
+        // Calculate totals if not explicitly provided
+        if (totalBudget === 0) {
+            totalBudget = players.reduce((sum, p) => sum + p.bidAmount, 0);
+        }
+        if (remainingBudget === 0) {
+            remainingBudget = 100000000 - totalBudget; // Default total budget
+        }
+
+        return {
+            teamName,
+            players,
+            totalBudget,
+            remainingBudget,
+            color: TEAM_COLORS[teamName] || '#666666'
+        };
+    } catch (error) {
+        console.error(`Error parsing data for ${teamName}:`, error);
+        return null;
+    }
+}
+
+// Display all teams
 function displayTeams() {
     const container = document.getElementById('teamsContainer');
-    container.innerHTML = '';
-
+    
     if (teamsData.length === 0) {
         container.innerHTML = '<div class="no-data">No team data available</div>';
         return;
     }
 
-    teamsData.forEach(team => {
-        const teamCard = createTeamCard(team);
-        container.appendChild(teamCard);
-    });
+    const teamsHTML = teamsData.map(team => createTeamCard(team)).join('');
+    container.innerHTML = `<div class="teams-grid">${teamsHTML}</div>`;
 }
 
-// Create HTML card for a team
+// Create HTML for a team card
 function createTeamCard(team) {
-    const card = document.createElement('div');
-    card.className = 'team-card';
+    const playersHTML = team.players.map((player, idx) => `
+        <tr class="${idx % 2 === 0 ? 'even-row' : 'odd-row'}">
+            <td>${player.name}</td>
+            <td class="amount">${player.bidFormatted}</td>
+        </tr>
+    `).join('');
 
-    // Team header
-    const header = document.createElement('div');
-    header.className = 'team-header';
-    header.innerHTML = `
-        <div class="team-name">${team.teamName}</div>
-        <div class="team-stats">
-            Players: ${team.playerCount} | Total Bid: ${team.totalBid} | Remaining Bid: ${team.remainingBid}
+    const noPlayers = team.players.length === 0;
+
+    return `
+        <div class="team-card" style="border-top: 5px solid ${team.color}">
+            <div class="team-header" style="background-color: ${team.color}">
+                <h3 class="team-name">${team.teamName}</h3>
+                <div class="team-stats">
+                    <span class="stat">Players: ${team.players.length}</span>
+                    <span class="stat">Total: ${formatCurrency(team.totalBudget)}</span>
+                </div>
+            </div>
+            ${noPlayers ? 
+                '<div class="no-data">No players data</div>' :
+                `<div class="players-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Player Name</th>
+                                <th>Bid Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${playersHTML}
+                        </tbody>
+                    </table>
+                </div>`
+            }
         </div>
     `;
-
-    // Players table
-    const tableContainer = document.createElement('div');
-    tableContainer.className = 'players-table';
-
-    const table = document.createElement('table');
-
-    // Table header
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-        <tr>
-            <th>#</th>
-            <th>Player Name</th>
-            <th>Bid Amount</th>
-        </tr>
-    `;
-
-    // Table body
-    const tbody = document.createElement('tbody');
-    team.players.forEach((player, index) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${index + 1}</td>
-            <td>${player.name}</td>
-            <td>${player.bidAmount}</td>
-        `;
-        tbody.appendChild(row);
-    });
-
-    table.appendChild(thead);
-    table.appendChild(tbody);
-    tableContainer.appendChild(table);
-
-    card.appendChild(header);
-    card.appendChild(tableContainer);
-
-    return card;
 }
 
 // Helper function to format currency
-function formatCurrency(value) {
-    if (!value && value !== 0) return '-';
-    const num = parseFloat(value);
+function formatCurrency(num) {
     if (isNaN(num)) return '-';
 
     // Format as Indian currency (lakhs/crores)
@@ -248,23 +270,29 @@ function showLoading(show) {
 
 // Show error message
 function showError(message) {
-    const errorDiv = document.getElementById('error');
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
+    const errorDiv = document.getElementById('errorMessage');
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
 }
 
 // Hide error message
 function hideError() {
-    document.getElementById('error').style.display = 'none';
+    const errorDiv = document.getElementById('errorMessage');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
 }
 
-// Update last updated time
+// Update last refresh time
 function updateLastUpdatedTime() {
     const now = new Date();
     const timeString = now.toLocaleString('en-IN', {
-        day: '2-digit',
-        month: 'short',
+        weekday: 'short',
         year: 'numeric',
+        month: 'short',
+        day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
@@ -272,5 +300,3 @@ function updateLastUpdatedTime() {
     });
     document.getElementById('lastUpdated').textContent = `Last Updated: ${timeString}`;
 }
-
-
