@@ -1,7 +1,7 @@
 // Configuration
 const TEAM_NAMES = ['Malnad Bulls', 'Crimson Warriors', 'Friends XI', 'Bengaluru Gladiators', 'Mysore Karadas', 'SDP GC', 'UCCB', 'Sanatan Strikers'];
 //const EXCEL_FOLDER = 'excel_data/'; // Folder where Excel files are stored
-const EXCEL_FOLDER = 'https://1drv.ms/f/c/a544a38d50095bd1/IgB2fAeEvrI0RoY35ynCg4o2Acl1zcOhe7UgvmMuRntgvqQ?e=IgR5pz';
+const EXCEL_FOLDER = 'https://1drv.ms/f/c/a544a38d50095bd1/IgB2fAeEvrI0RoY35ynCg4o2Acl1zcOhe7UgvmMuRntgvqQ?e=IgR5pz/';
 
 // Global data store
 let teamsData = [];
@@ -272,4 +272,5 @@ function updateLastUpdatedTime() {
     });
     document.getElementById('lastUpdated').textContent = `Last Updated: ${timeString}`;
 }
+
 
